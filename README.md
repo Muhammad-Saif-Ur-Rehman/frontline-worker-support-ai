@@ -53,12 +53,12 @@ graph TD
 | **Guidance Agent** | **Location-aware service matching** with GPS coordinates and real distance calculations | Google Gemini 1.5 Pro | **Real-time proximity matching** |
 | **Booking Agent** | Creates confirmed bookings with nearest available services | Rule-based with location validation | Distance-based booking prioritization |
 | **Follow-up Agent** | Generates location-specific instructions and nearby resources | Google Gemini 1.5 Pro | Area-specific emergency guidance |
-| **Equity Agent** | Monitors geographical service accessibility and distance fairness | Google Gemini 1.5 Pro | Geographic equity analysis |
+| **Equity Agent** | Monitors geographical service accessibility and distance fairness | Google Gemini-2.5-flash-lite | Geographic equity analysis |
 
 ## 🚀 Key Features
 
 ### 🧠 **Advanced AI Processing**
-- **Google Gemini 1.5 Pro Integration**: All agents powered by state-of-the-art language models
+- **Google Gemini-2.5-flash-lite Integration**: All agents powered by state-of-the-art language models
 - **Intelligent Emergency Classification**: 
   - 🚗 **Accidents** → Emergency Services (Rescue 1122) ✅
   - 🏥 **Medical** → Hospitals + Emergency Services
