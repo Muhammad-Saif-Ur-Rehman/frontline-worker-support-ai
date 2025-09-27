@@ -43,23 +43,36 @@ export class Coordinator {
     if (Math.random() < 0.03) {
       issues.push('Database connection unstable');
     }
-    
-    return {
+
+    const healthStatus = {
       isHealthy: issues.length === 0,
       issues
     };
+    
+    console.log('🧠 META-AGENT: System health check:', healthStatus);
+    
+    return healthStatus;
   }
 
   async processRequest(
     request: EmergencyRequest,
     forceMode?: 'normal' | 'degraded' | 'conflict'
   ): Promise<CoordinatorResult> {
+    console.log('🧠 META-AGENT COORDINATOR: Starting request processing', {
+      requestId: request.id,
+      requestText: request.text,
+      location: request.location,
+      forceMode
+    });
+
     const processingTrace: ProcessingStep[] = [];
     const conflicts: string[] = [];
     
     // Meta-Agent determines processing mode based on system conditions
     const mode = this.determineProcessingMode(forceMode);
     const shouldTriggerConflict = forceMode === 'conflict';
+    
+    console.log('🧠 META-AGENT: Determined processing mode:', mode, shouldTriggerConflict ? '(with conflict simulation)' : '');
     
     // Log mode determination
     const modeStep = this.createProcessingStep('Coordinator', 'processing');
@@ -69,11 +82,18 @@ export class Coordinator {
 
     try {
       // Step 1: Triage Analysis
+      console.log('🧠 META-AGENT: Step 1 - Starting Triage Analysis');
       const triageStep = this.createProcessingStep('TriageAgent', 'processing');
       processingTrace.push(triageStep);
 
       const triageResponse = await this.triageAgent.analyze(request, mode === 'degraded');
       this.updateStep(triageStep, triageResponse.success ? 'completed' : 'error', triageResponse);
+      
+      console.log('🧠 META-AGENT: Triage result:', {
+        success: triageResponse.success,
+        urgency: triageResponse.data?.urgency,
+        confidence: triageResponse.confidence
+      });
 
       if (!triageResponse.success || !triageResponse.data) {
         throw new Error('Triage analysis failed');
@@ -101,6 +121,7 @@ export class Coordinator {
       }
 
       // Step 2: Service Guidance
+      console.log('🧠 META-AGENT: Step 2 - Starting Service Guidance');
       const guidanceStep = this.createProcessingStep('GuidanceAgent', 'processing');
       processingTrace.push(guidanceStep);
 
@@ -110,12 +131,19 @@ export class Coordinator {
         mode === 'degraded'
       );
       this.updateStep(guidanceStep, guidanceResponse.success ? 'completed' : 'error', guidanceResponse);
+      
+      console.log('🧠 META-AGENT: Guidance result:', {
+        success: guidanceResponse.success,
+        selectedService: guidanceResponse.data?.serviceName,
+        serviceType: guidanceResponse.data?.serviceType
+      });
 
       if (!guidanceResponse.success || !guidanceResponse.data) {
         throw new Error('Service guidance failed');
       }
 
       // Step 3: Booking Creation
+      console.log('🧠 META-AGENT: Step 3 - Starting Booking Creation');
       const bookingStep = this.createProcessingStep('BookingAgent', 'processing');
       processingTrace.push(bookingStep);
 
@@ -126,12 +154,19 @@ export class Coordinator {
         mode === 'degraded'
       );
       this.updateStep(bookingStep, bookingResponse.success ? 'completed' : 'error', bookingResponse);
+      
+      console.log('🧠 META-AGENT: Booking result:', {
+        success: bookingResponse.success,
+        bookingId: bookingResponse.data?.bookingId,
+        status: bookingResponse.data?.status
+      });
 
       if (!bookingResponse.success || !bookingResponse.data) {
         throw new Error('Booking creation failed');
       }
 
       // Step 4: Follow-up Generation
+      console.log('🧠 META-AGENT: Step 4 - Starting Follow-up Generation');
       const followUpStep = this.createProcessingStep('FollowUpAgent', 'processing');
       processingTrace.push(followUpStep);
 
@@ -141,12 +176,18 @@ export class Coordinator {
         mode === 'degraded'
       );
       this.updateStep(followUpStep, followUpResponse.success ? 'completed' : 'error', followUpResponse);
+      
+      console.log('🧠 META-AGENT: Follow-up result:', {
+        success: followUpResponse.success,
+        hasMessage: !!followUpResponse.data?.message
+      });
 
       if (!followUpResponse.success || !followUpResponse.data) {
         throw new Error('Follow-up generation failed');
       }
 
       // Step 5: Equity Logging
+      console.log('🧠 META-AGENT: Step 5 - Starting Equity Analysis');
       const equityStep = this.createProcessingStep('EquityAgent', 'processing');
       processingTrace.push(equityStep);
 
@@ -158,13 +199,18 @@ export class Coordinator {
         mode === 'degraded'
       );
       this.updateStep(equityStep, equityResponse.success ? 'completed' : 'error', equityResponse);
+      
+      console.log('🧠 META-AGENT: Equity result:', {
+        success: equityResponse.success,
+        fairnessScore: equityResponse.data?.fairnessScore
+      });
 
       if (!equityResponse.success || !equityResponse.data) {
         throw new Error('Equity logging failed');
       }
 
       // Return comprehensive result
-      return {
+      const finalResult = {
         requestId: request.id,
         finalUrgency,
         selectedService: guidanceResponse.data,
@@ -175,8 +221,24 @@ export class Coordinator {
         mode,
         conflicts
       };
+      
+      console.log('🧠 META-AGENT: Processing completed successfully!', {
+        requestId: finalResult.requestId,
+        totalSteps: processingTrace.length,
+        finalUrgency: finalResult.finalUrgency,
+        selectedServiceType: finalResult.selectedService.serviceType,
+        mode: finalResult.mode
+      });
+      
+      return finalResult;
 
     } catch (error) {
+      console.error('🧠 META-AGENT: Processing failed!', {
+        error: error instanceof Error ? error.message : error,
+        processingSteps: processingTrace.length,
+        lastCompletedStep: processingTrace.filter(s => s.status === 'completed').length
+      });
+      
       // Mark any pending steps as error
       processingTrace.forEach(step => {
         if (step.status === 'processing') {

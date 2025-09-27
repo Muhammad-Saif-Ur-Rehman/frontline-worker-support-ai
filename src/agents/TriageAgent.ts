@@ -1,5 +1,6 @@
 import { EmergencyRequest, TriageResult, AgentResponse } from '../types';
 import { URGENCY_KEYWORDS } from '../data/services';
+import { getGeminiService } from '../services/GeminiService';
 
 export class TriageAgent {
   async analyze(request: EmergencyRequest, isDegraded = false): Promise<AgentResponse<TriageResult>> {
@@ -10,61 +11,46 @@ export class TriageAgent {
         return this.degradedAnalysis(request, startTime);
       }
 
-      // Simulate AI processing delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Use real AI processing with Gemini
+      const geminiService = getGeminiService();
+      const aiResponse = await geminiService.analyzeEmergencyTriage(request.text, request.location);
 
-      const text = request.text.toLowerCase();
-      const keywords: string[] = [];
-      let urgency: 'High' | 'Medium' | 'Low' = 'Low';
-      let confidence = 0.8;
+      console.log('TriageAgent - AI Response success:', aiResponse.success); // Debug log
+      console.log('TriageAgent - AI Response content:', aiResponse.content); // Debug log
 
-      // Advanced keyword analysis
-      if (this.containsKeywords(text, URGENCY_KEYWORDS.high)) {
-        urgency = 'High';
-        confidence = 0.95;
-        keywords.push(...URGENCY_KEYWORDS.high.filter(k => text.includes(k)));
-      } else if (this.containsKeywords(text, URGENCY_KEYWORDS.medium)) {
-        urgency = 'Medium';
-        confidence = 0.88;
-        keywords.push(...URGENCY_KEYWORDS.medium.filter(k => text.includes(k)));
-      } else {
-        urgency = 'Low';
-        confidence = 0.75;
-        keywords.push(...URGENCY_KEYWORDS.low.filter(k => text.includes(k)));
+      if (!aiResponse.success || !aiResponse.content) {
+        // Fallback to rule-based analysis if AI fails
+        console.warn('Gemini AI failed, falling back to rule-based analysis:', aiResponse.error);
+        return this.degradedAnalysis(request, startTime);
       }
 
-      // Context-aware adjustments
-      if (text.includes('father') || text.includes('mother') || text.includes('child')) {
-        confidence += 0.1;
-      }
-      
-      if (text.includes('islamabad') || text.includes('rawalpindi')) {
-        confidence += 0.05;
-      }
+      try {
+        const aiAnalysis = geminiService.parseJsonResponse(aiResponse.content);
+        
+        const result: TriageResult = {
+          urgency: aiAnalysis.urgency,
+          confidence: aiAnalysis.confidence || 0.8,
+          reasoning: aiAnalysis.reasoning || 'AI-powered emergency triage analysis completed',
+          keywords: aiAnalysis.keywords || []
+        };
 
-      const result: TriageResult = {
-        urgency,
-        confidence: Math.min(confidence, 1.0),
-        reasoning: `Analyzed request text for medical emergency indicators. Found keywords: ${keywords.join(', ')}. Urgency determined based on severity patterns.`,
-        keywords
-      };
+        return {
+          success: true,
+          data: result,
+          reasoning: `AI Analysis: ${result.reasoning}`,
+          confidence: result.confidence,
+          processingTime: Date.now() - startTime
+        };
 
-      return {
-        success: true,
-        data: result,
-        reasoning: result.reasoning,
-        confidence: result.confidence,
-        processingTime: Date.now() - startTime
-      };
+      } catch (parseError) {
+        console.error('Failed to parse AI response:', parseError);
+        return this.degradedAnalysis(request, startTime);
+      }
 
     } catch (error) {
-      return {
-        success: false,
-        error: `Triage analysis failed: ${error}`,
-        reasoning: 'Error in AI-based triage analysis',
-        confidence: 0,
-        processingTime: Date.now() - startTime
-      };
+      console.error('TriageAgent AI error:', error);
+      // Fallback to rule-based analysis
+      return this.degradedAnalysis(request, startTime);
     }
   }
 

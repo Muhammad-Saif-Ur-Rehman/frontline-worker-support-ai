@@ -1,4 +1,5 @@
 import { BookingRecord, ServiceMatch, FollowUpMessage, AgentResponse } from '../types';
+import { getGeminiService } from '../services/GeminiService';
 
 export class FollowUpAgent {
   async generateFollowUp(
@@ -13,37 +14,47 @@ export class FollowUpAgent {
         return this.degradedFollowUp(booking, service, startTime);
       }
 
-      // Simulate AI message generation
-      await new Promise(resolve => setTimeout(resolve, 600));
+      // Use real AI processing with Gemini
+      const geminiService = getGeminiService();
+      
+      const aiResponse = await geminiService.generateFollowUpMessage(
+        booking.requestText,
+        service,
+        booking,
+        booking.urgency
+      );
 
-      const message = this.generateConfirmationMessage(booking, service);
-      const actions = this.generateActionItems(booking, service);
-      const nextSteps = this.generateNextSteps(booking, service);
-      const emergencyContacts = this.getEmergencyContacts(service);
+      if (!aiResponse.success || !aiResponse.content) {
+        console.warn('Gemini AI follow-up generation failed, falling back:', aiResponse.error);
+        return this.degradedFollowUp(booking, service, startTime);
+      }
 
-      const followUp: FollowUpMessage = {
-        message,
-        actions,
-        nextSteps,
-        emergencyContacts
-      };
+      try {
+        const aiAnalysis = geminiService.parseJsonResponse(aiResponse.content);
+        
+        const followUp: FollowUpMessage = {
+          message: aiAnalysis.message || this.generateConfirmationMessage(booking, service),
+          actions: aiAnalysis.actions || this.generateActionItems(booking, service),
+          nextSteps: aiAnalysis.nextSteps || this.generateNextSteps(booking, service),
+          emergencyContacts: aiAnalysis.emergencyContacts || this.getEmergencyContacts(service)
+        };
 
-      return {
-        success: true,
-        data: followUp,
-        reasoning: `Generated personalized follow-up message with specific instructions for ${service.serviceType} service.`,
-        confidence: 0.92,
-        processingTime: Date.now() - startTime
-      };
+        return {
+          success: true,
+          data: followUp,
+          reasoning: `AI-Generated personalized follow-up message with specific instructions for ${service.serviceType} service.`,
+          confidence: 0.92,
+          processingTime: Date.now() - startTime
+        };
+
+      } catch (parseError) {
+        console.error('Failed to parse AI follow-up response:', parseError);
+        return this.degradedFollowUp(booking, service, startTime);
+      }
 
     } catch (error) {
-      return {
-        success: false,
-        error: `Follow-up generation failed: ${error}`,
-        reasoning: 'Error in automated follow-up system',
-        confidence: 0,
-        processingTime: Date.now() - startTime
-      };
+      console.error('FollowUpAgent AI error:', error);
+      return this.degradedFollowUp(booking, service, startTime);
     }
   }
 
@@ -115,7 +126,7 @@ export class FollowUpAgent {
       steps.push('Emergency team will contact you within 15 minutes');
       steps.push('If condition worsens, call emergency line immediately');
     } else {
-      steps.push('Service provider will confirm appointment details');
+      steps.push(`${service.serviceName} will confirm appointment details`);
       steps.push('You will receive SMS confirmation');
       steps.push('Arrive 15 minutes early for your appointment');
     }

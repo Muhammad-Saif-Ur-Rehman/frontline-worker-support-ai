@@ -2,43 +2,38 @@ import React, { useState } from 'react';
 import { Send, AlertTriangle, MapPin } from 'lucide-react';
 
 interface RequestFormProps {
-  onSubmit: (text: string, scenario?: 'normal' | 'conflict' | 'degraded') => void;
+  onSubmit: (text: string) => void;
   isProcessing: boolean;
 }
 
 export const RequestForm: React.FC<RequestFormProps> = ({ onSubmit, isProcessing }) => {
   const [requestText, setRequestText] = useState('');
-  const [selectedScenario, setSelectedScenario] = useState<'normal' | 'conflict' | 'degraded'>('normal');
 
-  // Demo scenarios for hackathon
+  // Example scenarios for quick testing
   const demoScenarios = [
     {
       text: 'My father has collapsed in Islamabad and is unconscious. Please help immediately!',
-      label: 'Emergency Medical (High Priority)',
-      scenario: 'normal' as const
+      label: 'Critical Emergency'
     },
     {
       text: 'There was a car accident near PIMS hospital. Two people are injured.',
-      label: 'Conflict Escalation Demo',
-      scenario: 'conflict' as const
+      label: 'Multi-Patient Incident'
     },
     {
       text: 'Need to schedule a routine check-up at a hospital in Rawalpindi.',
-      label: 'Degraded Mode Demo', 
-      scenario: 'degraded' as const
+      label: 'Routine Medical Care'
     }
   ];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (requestText.trim()) {
-      onSubmit(requestText.trim(), selectedScenario);
+      onSubmit(requestText.trim());
     }
   };
 
   const handleDemoScenario = (scenario: typeof demoScenarios[0]) => {
     setRequestText(scenario.text);
-    setSelectedScenario(scenario.scenario);
   };
 
   return (
@@ -66,7 +61,7 @@ export const RequestForm: React.FC<RequestFormProps> = ({ onSubmit, isProcessing
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <h3 className="col-span-full text-lg font-semibold text-gray-700 mb-2">Demo Scenarios (Hackathon)</h3>
+          <h3 className="col-span-full text-lg font-semibold text-gray-700 mb-2">Quick Start Examples</h3>
           {demoScenarios.map((scenario, index) => (
             <button
               key={index}
@@ -79,20 +74,6 @@ export const RequestForm: React.FC<RequestFormProps> = ({ onSubmit, isProcessing
               <div className="text-xs text-gray-600 mt-1 line-clamp-2">{scenario.text}</div>
             </button>
           ))}
-        </div>
-
-        <div className="flex items-center space-x-4">
-          <label className="text-sm font-medium text-gray-700">Processing Mode:</label>
-          <select
-            value={selectedScenario}
-            onChange={(e) => setSelectedScenario(e.target.value as any)}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={isProcessing}
-          >
-            <option value="normal">Normal Mode</option>
-            <option value="conflict">Conflict Resolution</option>
-            <option value="degraded">Degraded/Offline Mode</option>
-          </select>
         </div>
 
         <button

@@ -1,5 +1,6 @@
 import { EmergencyRequest, TriageResult, ServiceMatch, AgentResponse } from '../types';
-import { SERVICES, SERVICE_KEYWORDS } from '../data/services';
+import { SERVICES } from '../data/services';
+import { getGeminiService } from '../services/GeminiService';
 
 export class GuidanceAgent {
   async findBestService(
@@ -14,57 +15,55 @@ export class GuidanceAgent {
         return this.degradedMatching(request, triageResult, startTime);
       }
 
-      // Simulate AI processing
-      await new Promise(resolve => setTimeout(resolve, 1200));
+      // Use real AI processing with Gemini
+      const availableServices = SERVICES.filter(s => s.availability);
+      const geminiService = getGeminiService();
+      
+      const aiResponse = await geminiService.matchEmergencyServices(
+        request.text,
+        triageResult.urgency,
+        availableServices
+      );
 
-      const text = request.text.toLowerCase();
-      const serviceScores: { [key: string]: number } = {};
+      if (!aiResponse.success || !aiResponse.content) {
+        console.warn('Gemini AI service matching failed, falling back to rule-based:', aiResponse.error);
+        return this.degradedMatching(request, triageResult, startTime);
+      }
 
-      // Analyze text for service type indicators
-      for (const [serviceType, keywords] of Object.entries(SERVICE_KEYWORDS)) {
-        const matchingKeywords = keywords.filter(keyword => text.includes(keyword));
-        if (matchingKeywords.length > 0) {
-          serviceScores[serviceType] = matchingKeywords.length / keywords.length;
+      console.log('AI Response Content:', aiResponse.content); // Debug log
+
+      try {
+        const aiAnalysis = geminiService.parseJsonResponse(aiResponse.content);
+        console.log('Parsed AI Analysis:', aiAnalysis); // Debug log
+        
+        // Find the selected service by ID
+        const selectedService = SERVICES.find(s => s.serviceId === aiAnalysis.selectedServiceId);
+        
+        if (!selectedService) {
+          console.warn('AI selected invalid service ID:', aiAnalysis.selectedServiceId);
+          console.warn('Available service IDs:', SERVICES.map(s => s.serviceId));
+          console.warn('Falling back to rule-based matching');
+          return this.degradedMatching(request, triageResult, startTime);
         }
+
+        console.log('Selected Service:', selectedService); // Debug log
+
+        return {
+          success: true,
+          data: selectedService,
+          reasoning: `AI Service Matching: ${aiAnalysis.reasoning}`,
+          confidence: aiAnalysis.confidence || 0.8,
+          processingTime: Date.now() - startTime
+        };
+
+      } catch (parseError) {
+        console.error('Failed to parse AI service matching response:', parseError);
+        return this.degradedMatching(request, triageResult, startTime);
       }
-
-      // Urgency-based service prioritization
-      let preferredServiceType = 'hospital'; // default
-      if (triageResult.urgency === 'High') {
-        if (serviceScores.emergency) preferredServiceType = 'emergency';
-        else if (serviceScores.hospital) preferredServiceType = 'hospital';
-      }
-
-      // Find best matching service
-      const candidateServices = SERVICES.filter(s => 
-        s.serviceType === preferredServiceType && s.availability
-      );
-
-      if (candidateServices.length === 0) {
-        throw new Error(`No available ${preferredServiceType} services found`);
-      }
-
-      // Select best service (highest confidence + availability)
-      const bestService = candidateServices.reduce((best, current) => 
-        current.confidence > best.confidence ? current : best
-      );
-
-      return {
-        success: true,
-        data: bestService,
-        reasoning: `Matched request to ${bestService.serviceType} based on keywords and urgency level (${triageResult.urgency}). Selected ${bestService.serviceName} with ${(bestService.confidence * 100).toFixed(0)}% confidence.`,
-        confidence: bestService.confidence,
-        processingTime: Date.now() - startTime
-      };
 
     } catch (error) {
-      return {
-        success: false,
-        error: `Service guidance failed: ${error}`,
-        reasoning: 'Error in AI-based service matching',
-        confidence: 0,
-        processingTime: Date.now() - startTime
-      };
+      console.error('GuidanceAgent AI error:', error);
+      return this.degradedMatching(request, triageResult, startTime);
     }
   }
 
@@ -74,25 +73,49 @@ export class GuidanceAgent {
     startTime: number
   ): AgentResponse<ServiceMatch> {
     const text = request.text.toLowerCase();
+    console.log('Using degraded matching for text:', text); // Debug log
     
-    // Simple rule-based matching
-    let serviceType: string = 'hospital';
+    // Enhanced rule-based matching with better priority order
+    let serviceType: string = 'hospital'; // default fallback
     
-    if (text.includes('police') || text.includes('crime') || text.includes('theft')) {
+    // Car accidents and traffic emergencies - prioritize emergency services
+    if (text.includes('accident') || text.includes('crash') || text.includes('collision') ||
+        text.includes('car accident') || text.includes('vehicle') || text.includes('traffic accident')) {
+      serviceType = 'emergency'; // Emergency services for accidents
+    }
+    // Crime and safety related keywords
+    else if (text.includes('police') || text.includes('crime') || text.includes('theft') || 
+        text.includes('robbery') || text.includes('robbed') || text.includes('stolen') ||
+        text.includes('assault') || text.includes('violence') || text.includes('harassment') ||
+        text.includes('fraud') || text.includes('suspicious')) {
       serviceType = 'police';
-    } else if (text.includes('fire') || text.includes('burning')) {
+    } 
+    // Fire related keywords
+    else if (text.includes('fire') || text.includes('burning') || text.includes('smoke') || 
+             text.includes('explosion') || text.includes('gas leak')) {
       serviceType = 'fire';
-    } else if (triageResult.urgency === 'High') {
+    } 
+    // Mental health keywords
+    else if (text.includes('depression') || text.includes('anxiety') || text.includes('suicide') ||
+             text.includes('mental health') || text.includes('counseling')) {
+      serviceType = 'mental_health';
+    }
+    // High urgency medical emergencies
+    else if (triageResult.urgency === 'High') {
       serviceType = 'emergency';
     }
+
+    console.log('Determined service type:', serviceType); // Debug log
 
     const availableServices = SERVICES.filter(s => s.serviceType === serviceType && s.availability);
     const selectedService = availableServices[0] || SERVICES[0]; // fallback to first available
 
+    console.log('Selected service in degraded mode:', selectedService); // Debug log
+
     return {
       success: true,
       data: { ...selectedService, confidence: 0.5 },
-      reasoning: `DEGRADED MODE: Rule-based service matching. Selected ${selectedService.serviceName} based on simple keyword rules.`,
+      reasoning: `DEGRADED MODE: Rule-based service matching. Selected ${selectedService.serviceName} based on enhanced keyword rules.`,
       confidence: 0.5,
       processingTime: Date.now() - startTime
     };

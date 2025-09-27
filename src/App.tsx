@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { RequestForm } from './components/RequestForm';
 import { ProcessingStatus } from './components/ProcessingStatus';
 import { ResultDisplay } from './components/ResultDisplay';
 import { Coordinator } from './agents/Coordinator';
 import { EmergencyRequest, CoordinatorResult } from './types';
-import { Brain, Zap } from 'lucide-react';
+import { Brain } from 'lucide-react';
 
 function App() {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -14,10 +14,13 @@ function App() {
 
   const coordinator = new Coordinator();
 
-  const handleSubmitRequest = async (
-    text: string, 
-    scenario?: 'normal' | 'conflict' | 'degraded'
-  ) => {
+  // Add coordinator to window for testing (development only)
+  if (import.meta.env.DEV) {
+    (window as any).testCoordinator = coordinator;
+    console.log('🧠 META-AGENT: Coordinator available as window.testCoordinator for testing');
+  }
+
+  const handleSubmitRequest = async (text: string) => {
     setIsProcessing(true);
     setProcessingSteps([]);
     setResult(null);
@@ -33,7 +36,7 @@ function App() {
       };
 
       // Process with live updates
-      const coordinatorResult = await coordinator.processRequest(request, scenario);
+      const coordinatorResult = await coordinator.processRequest(request);
       
       // Update processing steps in real-time (simulate)
       const updateInterval = setInterval(() => {
@@ -65,12 +68,8 @@ function App() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Frontline Worker Support AI</h1>
-                <p className="text-sm text-gray-600">Meta-Agent Coordinated Emergency Response System</p>
+                <p className="text-sm text-gray-600">AI-Powered Emergency Response Coordination</p>
               </div>
-            </div>
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <Zap className="h-4 w-4" />
-              <span>Hackathon Demo</span>
             </div>
           </div>
         </div>
@@ -110,17 +109,17 @@ function App() {
                 </h3>
                 <p className="text-gray-600">
                   Submit an emergency request to see the multi-agent system in action.
-                  Try one of the demo scenarios to explore different processing modes.
+                  Try one of the example scenarios to get started quickly.
                 </p>
                 
                 <div className="mt-6 grid grid-cols-2 gap-4 text-sm">
                   <div className="bg-blue-50 p-4 rounded-lg">
                     <h4 className="font-semibold text-blue-900">5 AI Agents</h4>
-                    <p className="text-blue-700">Triage, Guidance, Booking, Follow-up, Equity</p>
+                    <p className="text-blue-700">Powered by Google Gemini AI</p>
                   </div>
                   <div className="bg-green-50 p-4 rounded-lg">
-                    <h4 className="font-semibold text-green-900">Smart Coordination</h4>
-                    <p className="text-green-700">Conflict resolution & fallback modes</p>
+                    <h4 className="font-semibold text-green-900">Real-time Analysis</h4>
+                    <p className="text-green-700">Intelligent emergency response coordination</p>
                   </div>
                 </div>
               </div>
@@ -131,8 +130,8 @@ function App() {
         {/* Footer Info */}
         <div className="mt-12 text-center text-gray-600">
           <p className="text-sm">
-            This is a hackathon demonstration of a multi-agent AI system for emergency response.
-            Real deployment would require integration with actual emergency services and compliance with healthcare regulations.
+            Emergency response coordination system powered by AI agents.
+            For emergencies, please contact your local emergency services immediately.
           </p>
         </div>
       </div>

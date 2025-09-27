@@ -53,7 +53,7 @@ export const ProcessingStatus: React.FC<ProcessingStatusProps> = ({ steps, isAct
               <div className="flex items-center">
                 {getStepIcon(step.status)}
                 <span className="ml-3 font-semibold text-gray-800">
-                  {step.agent === 'Coordinator' ? '🧠 Meta-Agent (Coordinator)' : `🤖 ${step.agent}`}
+                  {step.agent === 'Coordinator' ? '🧠 Meta-Agent (Coordinator)' : `🤖 ${step.agent} (AI-Powered)`}
                 </span>
               </div>
               {step.duration && (

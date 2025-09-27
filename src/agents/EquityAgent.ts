@@ -1,4 +1,5 @@
 import { EmergencyRequest, ServiceMatch, EquityLog, AgentResponse } from '../types';
+import { getGeminiService } from '../services/GeminiService';
 
 export class EquityAgent {
   async logEquityData(
@@ -14,37 +15,49 @@ export class EquityAgent {
         return this.degradedEquityLog(request, service, responseTime, startTime);
       }
 
-      // Simulate equity analysis
-      await new Promise(resolve => setTimeout(resolve, 400));
-
-      const fairnessScore = this.calculateFairnessScore(service, responseTime);
-      const demographic = this.inferDemographic(request);
-
-      const equityLog: EquityLog = {
-        requestId: request.id,
-        demographic,
-        serviceType: service.serviceType,
+      // Use real AI processing with Gemini for equity analysis
+      const geminiService = getGeminiService();
+      
+      const aiResponse = await geminiService.analyzeEquityImpact(
+        request.text,
+        service,
         responseTime,
-        fairnessScore,
-        notes: this.generateEquityNotes(fairnessScore, service, responseTime)
-      };
+        request.location
+      );
 
-      return {
-        success: true,
-        data: equityLog,
-        reasoning: `Equity analysis completed. Fairness score: ${fairnessScore.toFixed(2)}/1.0. Service distribution and response time within acceptable ranges.`,
-        confidence: 0.88,
-        processingTime: Date.now() - startTime
-      };
+      if (!aiResponse.success || !aiResponse.content) {
+        console.warn('Gemini AI equity analysis failed, falling back:', aiResponse.error);
+        return this.degradedEquityLog(request, service, responseTime, startTime);
+      }
+
+      try {
+        const aiAnalysis = geminiService.parseJsonResponse(aiResponse.content);
+        
+        const equityLog: EquityLog = {
+          requestId: request.id,
+          demographic: this.inferDemographic(request),
+          serviceType: service.serviceType,
+          responseTime,
+          fairnessScore: aiAnalysis.fairnessScore || this.calculateFairnessScore(service, responseTime),
+          notes: aiAnalysis.notes || this.generateEquityNotes(aiAnalysis.fairnessScore, service, responseTime)
+        };
+
+        return {
+          success: true,
+          data: equityLog,
+          reasoning: `AI Equity Analysis: Fairness score: ${equityLog.fairnessScore.toFixed(2)}/1.0. ${aiAnalysis.notes}`,
+          confidence: 0.88,
+          processingTime: Date.now() - startTime
+        };
+
+      } catch (parseError) {
+        console.error('Failed to parse AI equity response:', parseError);
+        return this.degradedEquityLog(request, service, responseTime, startTime);
+      }
 
     } catch (error) {
-      return {
-        success: false,
-        error: `Equity logging failed: ${error}`,
-        reasoning: 'Error in equity monitoring system',
-        confidence: 0,
-        processingTime: Date.now() - startTime
-      };
+      console.error('EquityAgent AI error:', error);
+      return this.degradedEquityLog(request, service, responseTime, startTime);
     }
   }
 

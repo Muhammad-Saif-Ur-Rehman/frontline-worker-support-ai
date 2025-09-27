@@ -7,9 +7,7 @@ import {
   MapPin, 
   AlertTriangle, 
   Shield,
-  FileText,
-  Wifi,
-  WifiOff
+  FileText
 } from 'lucide-react';
 
 interface ResultDisplayProps {
@@ -30,26 +28,12 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({ result }) => {
     }
   };
 
-  const getModeIcon = (mode: string) => {
-    return mode === 'degraded' ? 
-      <WifiOff className="h-5 w-5 text-orange-500" /> : 
-      <Wifi className="h-5 w-5 text-green-500" />;
-  };
-
   return (
     <div className="space-y-6">
       {/* Main Result Card */}
       <div className="bg-white rounded-2xl shadow-xl p-6 backdrop-blur-sm bg-opacity-90">
-        <div className="flex items-center justify-between mb-6">
+        <div className="mb-6">
           <h2 className="text-2xl font-bold text-gray-800">Request Processed Successfully</h2>
-          <div className="flex items-center space-x-2">
-            {getModeIcon(result.mode)}
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-              result.mode === 'degraded' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'
-            }`}>
-              {result.mode === 'degraded' ? 'Degraded Mode' : 'Normal Mode'}
-            </span>
-          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
