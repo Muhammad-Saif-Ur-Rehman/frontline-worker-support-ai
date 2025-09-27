@@ -26,7 +26,6 @@ export class EquityAgent {
       );
 
       if (!aiResponse.success || !aiResponse.content) {
-        console.warn('Gemini AI equity analysis failed, falling back:', aiResponse.error);
         return this.degradedEquityLog(request, service, responseTime, startTime);
       }
 
@@ -51,12 +50,10 @@ export class EquityAgent {
         };
 
       } catch (parseError) {
-        console.error('Failed to parse AI equity response:', parseError);
         return this.degradedEquityLog(request, service, responseTime, startTime);
       }
 
     } catch (error) {
-      console.error('EquityAgent AI error:', error);
       return this.degradedEquityLog(request, service, responseTime, startTime);
     }
   }

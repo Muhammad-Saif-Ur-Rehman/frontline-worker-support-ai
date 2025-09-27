@@ -1,4 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { SERVICES } from '../data/services';
+import { getLocationService, LocationCoordinates, NearbyService } from './LocationService';
 
 interface GeminiResponse {
     success: boolean;
@@ -65,68 +67,133 @@ Consider Pakistani context and emergency service availability in your analysis.
             };
 
         } catch (error) {
-            console.error('Gemini API Error (Triage):', error);
+            // Clean error handling - no verbose error logs in production
             return {
                 success: false,
-                error: `Gemini API call failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+                error: 'AI service temporarily unavailable'
             };
         }
     }
 
-    async matchEmergencyServices(requestText: string, urgencyLevel: string, availableServices: any[]): Promise<GeminiResponse> {
+    async matchEmergencyServices(requestText: string, urgencyLevel: string, location?: string): Promise<GeminiResponse> {
         try {
-            const servicesInfo = availableServices.map(s => ({
+            const locationService = getLocationService();
+            
+            // Step 1: Geocode the user's location
+            let userLocation: LocationCoordinates | null = null;
+            if (location) {
+                userLocation = await locationService.geocodeLocation(location);
+            }
+            
+            // Step 2: Determine appropriate service types based on emergency description
+            const requiredServiceTypes = locationService.getServiceTypesForEmergency(requestText, urgencyLevel);
+            console.log('Required service types:', requiredServiceTypes);
+            
+            // Step 3: Find nearest services for each required type
+            const nearbyServices: NearbyService[] = [];
+            
+            for (const serviceType of requiredServiceTypes) {
+                if (userLocation) {
+                    const servicesForType = await locationService.findNearestServices(
+                        userLocation, 
+                        serviceType, 
+                        SERVICES,
+                        3 // Get top 3 nearest for each type
+                    );
+                    nearbyServices.push(...servicesForType);
+                }
+            }
+            
+            // Fallback if no user location or no nearby services found
+            if (nearbyServices.length === 0) {
+                const fallbackServices = SERVICES
+                    .filter(service => 
+                        service.availability && 
+                        requiredServiceTypes.some(type => type === 'all' || service.serviceType === type)
+                    )
+                    .slice(0, 5)
+                    .map(service => ({
+                        ...service,
+                        distance: 10, // Default distance
+                        travelTime: '15-20 min'
+                    }));
+                
+                nearbyServices.push(...fallbackServices);
+            }
+            
+            // Step 4: Remove duplicates and sort by distance
+            const uniqueServices = nearbyServices
+                .filter((service, index, self) => 
+                    self.findIndex(s => s.serviceId === service.serviceId) === index
+                )
+                .sort((a, b) => a.distance - b.distance);
+
+            console.log(`Found ${uniqueServices.length} nearby services for emergency types: ${requiredServiceTypes.join(', ')}`);
+
+            // Step 5: Use AI to make final selection with enhanced prompt
+            const servicesInfo = uniqueServices.map(s => ({
                 id: s.serviceId,
                 name: s.serviceName,
                 type: s.serviceType,
                 address: s.address,
-                phone: s.phone
+                phone: s.phone,
+                city: s.city,
+                distance: s.distance,
+                travelTime: s.travelTime
             }));
 
             const prompt = `
-You are an expert emergency service coordinator for Pakistan. Match the following emergency request to the most appropriate service.
+You are an expert emergency service coordinator for Pakistan. Based on the emergency analysis, select the MOST APPROPRIATE service.
 
 Emergency Request: "${requestText}"
 Urgency Level: ${urgencyLevel}
+User Location: ${location || 'Not specified'}
+Required Service Types: ${requiredServiceTypes.join(', ')}
 
-Available Services:
+Available Services (pre-filtered and sorted by proximity):
 ${JSON.stringify(servicesInfo, null, 2)}
 
-Please respond with ONLY a JSON object in this exact format:
+CRITICAL SERVICE TYPE ROUTING RULES:
+1. ACCIDENTS (car accidents, vehicle crashes, collisions):
+   - PRIMARY: Emergency services (Rescue 1122) for immediate rescue/ambulance
+   - SECONDARY: Hospitals only if no emergency services nearby
+   - NEVER route to police unless specifically mentioned crime/hit-and-run
+
+2. MEDICAL EMERGENCIES (heart attack, stroke, unconscious, bleeding):
+   - HIGH URGENCY: Emergency services (Rescue 1122) + Hospital
+   - MEDIUM/LOW: Hospital or emergency services
+
+3. CRIME (robbery, theft, violence, assault):
+   - PRIMARY: Police services
+   - Consider proximity within same city
+
+4. FIRE EMERGENCIES:
+   - PRIMARY: Fire department services
+
+5. MENTAL HEALTH:
+   - PRIMARY: Mental health specialized services
+   - SECONDARY: General hospitals
+
+PROXIMITY PRIORITY:
+- Services under 5km: Strongly preferred
+- Services 5-15km: Acceptable for specialized care
+- Services >15km: Only if no alternatives in required service type
+
+Please respond with ONLY a JSON object:
 {
   "selectedServiceId": "service-id",
-  "reasoning": "Explanation of why this service is the best match",
+  "reasoning": "Emergency type requires [service type] - selected closest available service at [distance]km",
   "confidence": 0.90,
+  "emergencyType": "accident|medical|crime|fire|mental_health",
   "alternativeServices": ["alt-service-id1", "alt-service-id2"]
 }
 
-Selection Criteria:
-- High urgency: Prioritize emergency services and hospitals with trauma capabilities
-- Car accidents/Vehicle crashes: Emergency services (emergency-001) for rescue/ambulance
-- Medical issues: Hospitals and medical centers
-- Crime/Safety/Robbery/Theft: Police services (police-001, police-002)
-- Fire/Explosions/Smoke: Fire department (fire-001)
-- Mental health issues: Specialized mental health services (mental-001)
-- Consider location proximity (Islamabad/Rawalpindi context)
-
-IMPORTANT: 
-- For car accidents, crashes, or vehicle-related emergencies: Select emergency services (emergency-001)
-- For crime, theft, robbery, violence, or safety issues: Select police service (police-001 or police-002)
-- For medical emergencies without trauma: Select hospital services
-
-Example mappings:
-- "car accident", "crash", "collision" → emergency service
-- "robbery", "theft", "crime" → police service
-- "heart attack", "collapsed" → emergency or hospital
-- "fire", "burning" → fire service
-- "depression", "anxiety" → mental health service
+REMEMBER: For accidents, prioritize emergency/rescue services over police or general hospitals.
 `;
 
             const result = await this.model.generateContent(prompt);
             const response = await result.response;
             const content = response.text();
-
-            console.log('Gemini Service Matching Response:', content); // Debug log
 
             return {
                 success: true,
@@ -134,10 +201,10 @@ Example mappings:
             };
 
         } catch (error) {
-            console.error('Gemini API Error (Service Matching):', error);
+            console.warn('AI service matching failed:', error);
             return {
                 success: false,
-                error: `Gemini API call failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+                error: 'AI service temporarily unavailable'
             };
         }
     }
@@ -194,10 +261,9 @@ Consider:
             };
 
         } catch (error) {
-            console.error('Gemini API Error (Follow-up):', error);
             return {
                 success: false,
-                error: `Gemini API call failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+                error: 'AI service temporarily unavailable'
             };
         }
     }
@@ -252,10 +318,9 @@ Focus on systemic fairness, not individual characteristics.
             };
 
         } catch (error) {
-            console.error('Gemini API Error (Equity Analysis):', error);
             return {
                 success: false,
-                error: `Gemini API call failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+                error: 'AI service temporarily unavailable'
             };
         }
     }
@@ -267,9 +332,8 @@ Focus on systemic fairness, not individual characteristics.
             const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim();
             return JSON.parse(cleanContent);
         } catch (error) {
-            console.error('Failed to parse Gemini JSON response:', error);
-            console.error('Raw content:', content);
-            throw new Error('Invalid JSON response from Gemini API');
+            // Clean error handling - don't log parsing failures in production
+            throw new Error('Invalid AI response format');
         }
     }
 }

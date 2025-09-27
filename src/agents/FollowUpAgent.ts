@@ -25,7 +25,6 @@ export class FollowUpAgent {
       );
 
       if (!aiResponse.success || !aiResponse.content) {
-        console.warn('Gemini AI follow-up generation failed, falling back:', aiResponse.error);
         return this.degradedFollowUp(booking, service, startTime);
       }
 
@@ -48,12 +47,10 @@ export class FollowUpAgent {
         };
 
       } catch (parseError) {
-        console.error('Failed to parse AI follow-up response:', parseError);
         return this.degradedFollowUp(booking, service, startTime);
       }
 
     } catch (error) {
-      console.error('FollowUpAgent AI error:', error);
       return this.degradedFollowUp(booking, service, startTime);
     }
   }

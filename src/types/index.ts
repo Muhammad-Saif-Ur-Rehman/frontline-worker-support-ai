@@ -22,6 +22,10 @@ export interface ServiceMatch {
   availability: boolean;
   distance?: number;
   confidence: number;
+  // Location-aware fields for proximity matching
+  city?: string;
+  coordinates?: { lat: number; lng: number };
+  coverage?: string[];
 }
 
 export interface BookingRecord {

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emergency Service Testing</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-case { border: 1px solid #ddd; margin: 10px 0; padding: 15px; border-radius: 5px; }
+        .result { background: #f9f9f9; padding: 10px; margin: 10px 0; border-radius: 3px; }
+        .success { border-left: 4px solid #4CAF50; }
+        .warning { border-left: 4px solid #FF9800; }
+        .error { border-left: 4px solid #f44336; }
+        button { background: #2196F3; color: white; border: none; padding: 10px 20px; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #1976D2; }
+    </style>
+</head>
+<body>
+    <h1>Emergency Service Matching Tests</h1>
+    <p>Testing the enhanced location-aware service matching with real location API</p>
+
+    <div class="test-case">
+        <h3>Test 1: Accident in DHA Lahore (Should route to Emergency Services)</h3>
+        <p><strong>Input:</strong> "There has been a car accident in DHA Phase 1, Lahore. Multiple vehicles involved, need immediate help"</p>
+        <p><strong>Expected:</strong> Emergency services (Rescue 1122) - NOT police</p>
+        <button onclick="testEmergency('There has been a car accident in DHA Phase 1, Lahore. Multiple vehicles involved, need immediate help', 'DHA Phase 1, Lahore', 'test1')">Run Test</button>
+        <div id="test1" class="result" style="display: none;"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>Test 2: Heart Attack in Islamabad (Should route to Hospital/Emergency)</h3>
+        <p><strong>Input:</strong> "My father is having chest pain and difficulty breathing near F-8 Islamabad"</p>
+        <p><strong>Expected:</strong> Hospital or Emergency services</p>
+        <button onclick="testEmergency('My father is having chest pain and difficulty breathing near F-8 Islamabad', 'F-8 Islamabad', 'test2')">Run Test</button>
+        <div id="test2" class="result" style="display: none;"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>Test 3: Robbery in Rawalpindi (Should route to Police)</h3>
+        <p><strong>Input:</strong> "I was robbed at gunpoint in Saddar, Rawalpindi. The thieves took my wallet and phone"</p>
+        <p><strong>Expected:</strong> Police services</p>
+        <button onclick="testEmergency('I was robbed at gunpoint in Saddar, Rawalpindi. The thieves took my wallet and phone', 'Saddar, Rawalpindi', 'test3')">Run Test</button>
+        <div id="test3" class="result" style="display: none;"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>Test 4: Fire Emergency (Should route to Fire Department)</h3>
+        <p><strong>Input:</strong> "There is a fire in a building in Gulberg, Lahore. Smoke is coming out"</p>
+        <p><strong>Expected:</strong> Fire department services</p>
+        <button onclick="testEmergency('There is a fire in a building in Gulberg, Lahore. Smoke is coming out', 'Gulberg, Lahore', 'test4')">Run Test</button>
+        <div id="test4" class="result" style="display: none;"></div>
+    </div>
+
+    <script>
+        async function testEmergency(text, location, resultId) {
+            const resultDiv = document.getElementById(resultId);
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<p>🔄 Testing emergency service matching...</p>';
+            
+            try {
+                // Simulate the emergency request to the main application
+                const response = await fetch('http://localhost:5174/api/emergency', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        location: location,
+                        urgency: 'High'
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('API request failed');
+                }
+                
+                const result = await response.json();
+                
+                // Format the result
+                let html = '<h4>Test Results:</h4>';
+                html += `<p><strong>Selected Service:</strong> ${result.serviceName || 'Unknown'}</p>`;
+                html += `<p><strong>Service Type:</strong> ${result.serviceType || 'Unknown'}</p>`;
+                html += `<p><strong>Distance:</strong> ${result.distance || 'Unknown'} km</p>`;
+                html += `<p><strong>AI Reasoning:</strong> ${result.reasoning || 'Not provided'}</p>`;
+                
+                // Determine if the result is correct
+                const serviceType = result.serviceType?.toLowerCase() || '';
+                let isCorrect = false;
+                let expectedType = '';
+                
+                if (resultId === 'test1') {
+                    expectedType = 'emergency services';
+                    isCorrect = serviceType.includes('emergency') && !serviceType.includes('police');
+                } else if (resultId === 'test2') {
+                    expectedType = 'hospital or emergency';
+                    isCorrect = serviceType.includes('hospital') || serviceType.includes('emergency');
+                } else if (resultId === 'test3') {
+                    expectedType = 'police';
+                    isCorrect = serviceType.includes('police');
+                } else if (resultId === 'test4') {
+                    expectedType = 'fire department';
+                    isCorrect = serviceType.includes('fire');
+                }
+                
+                if (isCorrect) {
+                    resultDiv.className = 'result success';
+                    html += `<p>✅ <strong>CORRECT:</strong> Properly routed to ${expectedType}</p>`;
+                } else {
+                    resultDiv.className = 'result error';
+                    html += `<p>❌ <strong>INCORRECT:</strong> Expected ${expectedType}, got ${serviceType}</p>`;
+                }
+                
+                resultDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `
+                    <h4>Test Failed:</h4>
+                    <p>❌ <strong>Error:</strong> ${error.message}</p>
+                    <p><em>Note: This test page simulates API calls. The actual app may not have a REST API endpoint yet.</em></p>
+                    <p><strong>Manual Testing Required:</strong> Please test these scenarios directly in the main application.</p>
+                `;
+            }
+        }
+
+        // Display current time for reference
+        document.addEventListener('DOMContentLoaded', function() {
+            const now = new Date().toLocaleString();
+            document.body.insertAdjacentHTML('afterbegin', 
+                `<p style="background: #e3f2fd; padding: 10px; border-radius: 3px; margin-bottom: 20px;">
+                    <strong>Test Session Started:</strong> ${now}<br>
+                    <strong>Application URL:</strong> <a href="http://localhost:5174" target="_blank">http://localhost:5174</a>
+                </p>`
+            );
+        });
+    </script>
+</body>
+</html>

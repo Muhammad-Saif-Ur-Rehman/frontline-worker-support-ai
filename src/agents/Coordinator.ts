@@ -12,7 +12,7 @@ export class Coordinator {
   private followUpAgent = new FollowUpAgent();
   private equityAgent = new EquityAgent();
   
-  private determineProcessingMode(forceMode?: 'normal' | 'degraded' | 'conflict'): 'normal' | 'degraded' {
+  private async determineProcessingMode(forceMode?: 'normal' | 'degraded' | 'conflict'): Promise<'normal' | 'degraded'> {
     if (forceMode === 'degraded') {
       return 'degraded';
     } else if (forceMode === 'conflict') {
@@ -21,27 +21,48 @@ export class Coordinator {
     } else if (forceMode === 'normal') {
       return 'normal';
     } else {
-      // Auto-detect degraded conditions (simulate network/system issues)
-      const systemHealth = this.checkSystemHealth();
+      // Auto-detect degraded conditions (real network/system checks)
+      const systemHealth = await this.checkSystemHealth();
       return systemHealth.isHealthy ? 'normal' : 'degraded';
     }
   }
   
-  private checkSystemHealth(): { isHealthy: boolean; issues: string[] } {
-    // Simulate system health checks
+  private async checkSystemHealth(): Promise<{ isHealthy: boolean; issues: string[] }> {
+    // Real system health checks (replacing random simulation)
     const issues: string[] = [];
     
-    // Simulate random system issues (10% chance)
-    if (Math.random() < 0.1) {
-      issues.push('Network connectivity issues detected');
+    // Check if Gemini API key is available
+    const apiKey = import.meta.env.VITE_GEMINI_KEY || process.env.GEMINI_KEY;
+    if (!apiKey) {
+      issues.push('Gemini API key not configured');
     }
     
-    if (Math.random() < 0.05) {
-      issues.push('AI service API rate limit exceeded');
+    // Check if we're in a test environment that should force degraded mode
+    const isDevelopmentTest = import.meta.env.DEV && (window as any).forceDegradedMode;
+    if (isDevelopmentTest) {
+      issues.push('Development mode: Forced degraded mode for testing');
     }
     
-    if (Math.random() < 0.03) {
-      issues.push('Database connection unstable');
+    // Real network connectivity test - only if we have API key
+    if (apiKey && !isDevelopmentTest) {
+      try {
+        // Quick network test - try to reach Google's public API with short timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+        
+        await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
+          method: 'GET',
+          headers: {
+            'X-goog-api-key': apiKey
+          },
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+      } catch (networkError) {
+        // Network is slow or unavailable - trigger degraded mode
+        issues.push('Network connectivity issues detected');
+      }
     }
 
     const healthStatus = {
@@ -49,7 +70,10 @@ export class Coordinator {
       issues
     };
     
-    console.log('🧠 META-AGENT: System health check:', healthStatus);
+    // Only log health status if there are issues or in debug mode
+    if (!healthStatus.isHealthy || import.meta.env.DEV) {
+      console.log('🧠 META-AGENT: System health check:', healthStatus);
+    }
     
     return healthStatus;
   }
@@ -58,18 +82,17 @@ export class Coordinator {
     request: EmergencyRequest,
     forceMode?: 'normal' | 'degraded' | 'conflict'
   ): Promise<CoordinatorResult> {
-    console.log('🧠 META-AGENT COORDINATOR: Starting request processing', {
+    console.log('🧠 META-AGENT COORDINATOR: Processing request', {
       requestId: request.id,
-      requestText: request.text,
       location: request.location,
-      forceMode
+      mode: forceMode || 'auto'
     });
 
     const processingTrace: ProcessingStep[] = [];
     const conflicts: string[] = [];
     
     // Meta-Agent determines processing mode based on system conditions
-    const mode = this.determineProcessingMode(forceMode);
+    const mode = await this.determineProcessingMode(forceMode);
     const shouldTriggerConflict = forceMode === 'conflict';
     
     console.log('🧠 META-AGENT: Determined processing mode:', mode, shouldTriggerConflict ? '(with conflict simulation)' : '');
@@ -82,18 +105,11 @@ export class Coordinator {
 
     try {
       // Step 1: Triage Analysis
-      console.log('🧠 META-AGENT: Step 1 - Starting Triage Analysis');
       const triageStep = this.createProcessingStep('TriageAgent', 'processing');
       processingTrace.push(triageStep);
 
       const triageResponse = await this.triageAgent.analyze(request, mode === 'degraded');
       this.updateStep(triageStep, triageResponse.success ? 'completed' : 'error', triageResponse);
-      
-      console.log('🧠 META-AGENT: Triage result:', {
-        success: triageResponse.success,
-        urgency: triageResponse.data?.urgency,
-        confidence: triageResponse.confidence
-      });
 
       if (!triageResponse.success || !triageResponse.data) {
         throw new Error('Triage analysis failed');
@@ -121,7 +137,6 @@ export class Coordinator {
       }
 
       // Step 2: Service Guidance
-      console.log('🧠 META-AGENT: Step 2 - Starting Service Guidance');
       const guidanceStep = this.createProcessingStep('GuidanceAgent', 'processing');
       processingTrace.push(guidanceStep);
 
@@ -131,19 +146,12 @@ export class Coordinator {
         mode === 'degraded'
       );
       this.updateStep(guidanceStep, guidanceResponse.success ? 'completed' : 'error', guidanceResponse);
-      
-      console.log('🧠 META-AGENT: Guidance result:', {
-        success: guidanceResponse.success,
-        selectedService: guidanceResponse.data?.serviceName,
-        serviceType: guidanceResponse.data?.serviceType
-      });
 
       if (!guidanceResponse.success || !guidanceResponse.data) {
         throw new Error('Service guidance failed');
       }
 
       // Step 3: Booking Creation
-      console.log('🧠 META-AGENT: Step 3 - Starting Booking Creation');
       const bookingStep = this.createProcessingStep('BookingAgent', 'processing');
       processingTrace.push(bookingStep);
 
@@ -154,19 +162,12 @@ export class Coordinator {
         mode === 'degraded'
       );
       this.updateStep(bookingStep, bookingResponse.success ? 'completed' : 'error', bookingResponse);
-      
-      console.log('🧠 META-AGENT: Booking result:', {
-        success: bookingResponse.success,
-        bookingId: bookingResponse.data?.bookingId,
-        status: bookingResponse.data?.status
-      });
 
       if (!bookingResponse.success || !bookingResponse.data) {
         throw new Error('Booking creation failed');
       }
 
       // Step 4: Follow-up Generation
-      console.log('🧠 META-AGENT: Step 4 - Starting Follow-up Generation');
       const followUpStep = this.createProcessingStep('FollowUpAgent', 'processing');
       processingTrace.push(followUpStep);
 
@@ -176,18 +177,12 @@ export class Coordinator {
         mode === 'degraded'
       );
       this.updateStep(followUpStep, followUpResponse.success ? 'completed' : 'error', followUpResponse);
-      
-      console.log('🧠 META-AGENT: Follow-up result:', {
-        success: followUpResponse.success,
-        hasMessage: !!followUpResponse.data?.message
-      });
 
       if (!followUpResponse.success || !followUpResponse.data) {
         throw new Error('Follow-up generation failed');
       }
 
       // Step 5: Equity Logging
-      console.log('🧠 META-AGENT: Step 5 - Starting Equity Analysis');
       const equityStep = this.createProcessingStep('EquityAgent', 'processing');
       processingTrace.push(equityStep);
 
@@ -199,11 +194,6 @@ export class Coordinator {
         mode === 'degraded'
       );
       this.updateStep(equityStep, equityResponse.success ? 'completed' : 'error', equityResponse);
-      
-      console.log('🧠 META-AGENT: Equity result:', {
-        success: equityResponse.success,
-        fairnessScore: equityResponse.data?.fairnessScore
-      });
 
       if (!equityResponse.success || !equityResponse.data) {
         throw new Error('Equity logging failed');
@@ -222,22 +212,16 @@ export class Coordinator {
         conflicts
       };
       
-      console.log('🧠 META-AGENT: Processing completed successfully!', {
+      console.log('🧠 META-AGENT: Request processed successfully', {
         requestId: finalResult.requestId,
-        totalSteps: processingTrace.length,
-        finalUrgency: finalResult.finalUrgency,
-        selectedServiceType: finalResult.selectedService.serviceType,
-        mode: finalResult.mode
+        mode: finalResult.mode,
+        selectedService: finalResult.selectedService.serviceName
       });
       
       return finalResult;
 
     } catch (error) {
-      console.error('🧠 META-AGENT: Processing failed!', {
-        error: error instanceof Error ? error.message : error,
-        processingSteps: processingTrace.length,
-        lastCompletedStep: processingTrace.filter(s => s.status === 'completed').length
-      });
+      console.error('🧠 META-AGENT: Processing failed -', error instanceof Error ? error.message : 'Unknown error');
       
       // Mark any pending steps as error
       processingTrace.forEach(step => {

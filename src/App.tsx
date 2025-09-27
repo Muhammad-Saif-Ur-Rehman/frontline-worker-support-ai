@@ -17,7 +17,16 @@ function App() {
   // Add coordinator to window for testing (development only)
   if (import.meta.env.DEV) {
     (window as any).testCoordinator = coordinator;
-    console.log('🧠 META-AGENT: Coordinator available as window.testCoordinator for testing');
+    (window as any).forceDegradedMode = false; // Can be set to true for testing
+    (window as any).enableDegradedMode = () => {
+      (window as any).forceDegradedMode = true;
+      console.log('🔧 Degraded mode enabled for testing');
+    };
+    (window as any).disableDegradedMode = () => {
+      (window as any).forceDegradedMode = false;
+      console.log('🔧 Degraded mode disabled');
+    };
+    // Remove repetitive console logs - only show once on app load
   }
 
   const handleSubmitRequest = async (text: string) => {

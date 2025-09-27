@@ -1,5 +1,5 @@
 import { EmergencyRequest, TriageResult, ServiceMatch, AgentResponse } from '../types';
-import { SERVICES } from '../data/services';
+import { SERVICES, inferLocationFromText, getServicesByProximity } from '../data/services';
 import { getGeminiService } from '../services/GeminiService';
 
 export class GuidanceAgent {
@@ -15,38 +15,30 @@ export class GuidanceAgent {
         return this.degradedMatching(request, triageResult, startTime);
       }
 
-      // Use real AI processing with Gemini
-      const availableServices = SERVICES.filter(s => s.availability);
+      // Use real AI processing with Gemini - now with enhanced location awareness
       const geminiService = getGeminiService();
       
       const aiResponse = await geminiService.matchEmergencyServices(
         request.text,
         triageResult.urgency,
-        availableServices
+        request.location // Pass the original location text for better geocoding
       );
 
       if (!aiResponse.success || !aiResponse.content) {
-        console.warn('Gemini AI service matching failed, falling back to rule-based:', aiResponse.error);
+        console.warn('Gemini AI service matching failed, falling back to rule-based matching');
         return this.degradedMatching(request, triageResult, startTime);
       }
 
-      console.log('AI Response Content:', aiResponse.content); // Debug log
-
       try {
         const aiAnalysis = geminiService.parseJsonResponse(aiResponse.content);
-        console.log('Parsed AI Analysis:', aiAnalysis); // Debug log
         
         // Find the selected service by ID
         const selectedService = SERVICES.find(s => s.serviceId === aiAnalysis.selectedServiceId);
         
         if (!selectedService) {
-          console.warn('AI selected invalid service ID:', aiAnalysis.selectedServiceId);
-          console.warn('Available service IDs:', SERVICES.map(s => s.serviceId));
-          console.warn('Falling back to rule-based matching');
+          console.warn('AI selected invalid service, falling back to rule-based matching');
           return this.degradedMatching(request, triageResult, startTime);
         }
-
-        console.log('Selected Service:', selectedService); // Debug log
 
         return {
           success: true,
@@ -57,12 +49,12 @@ export class GuidanceAgent {
         };
 
       } catch (parseError) {
-        console.error('Failed to parse AI service matching response:', parseError);
+        console.warn('Failed to parse AI service matching response, falling back to rule-based matching');
         return this.degradedMatching(request, triageResult, startTime);
       }
 
     } catch (error) {
-      console.error('GuidanceAgent AI error:', error);
+      console.warn('GuidanceAgent AI error, falling back to rule-based matching');
       return this.degradedMatching(request, triageResult, startTime);
     }
   }
@@ -73,7 +65,9 @@ export class GuidanceAgent {
     startTime: number
   ): AgentResponse<ServiceMatch> {
     const text = request.text.toLowerCase();
-    console.log('Using degraded matching for text:', text); // Debug log
+    
+    // Get user location for proximity matching
+    const userLocation = inferLocationFromText(request.text + ' ' + (request.location || ''));
     
     // Enhanced rule-based matching with better priority order
     let serviceType: string = 'hospital'; // default fallback
@@ -105,17 +99,14 @@ export class GuidanceAgent {
       serviceType = 'emergency';
     }
 
-    console.log('Determined service type:', serviceType); // Debug log
-
-    const availableServices = SERVICES.filter(s => s.serviceType === serviceType && s.availability);
-    const selectedService = availableServices[0] || SERVICES[0]; // fallback to first available
-
-    console.log('Selected service in degraded mode:', selectedService); // Debug log
+    // Use location-aware service selection in degraded mode
+    const locationSortedServices = getServicesByProximity(SERVICES, userLocation, serviceType);
+    const selectedService = locationSortedServices[0] || SERVICES[0]; // fallback to first available
 
     return {
       success: true,
       data: { ...selectedService, confidence: 0.5 },
-      reasoning: `DEGRADED MODE: Rule-based service matching. Selected ${selectedService.serviceName} based on enhanced keyword rules.`,
+      reasoning: `DEGRADED MODE: Location-aware rule-based service matching. Selected ${selectedService.serviceName} (${selectedService.distance}km away) based on proximity and keyword rules.`,
       confidence: 0.5,
       processingTime: Date.now() - startTime
     };

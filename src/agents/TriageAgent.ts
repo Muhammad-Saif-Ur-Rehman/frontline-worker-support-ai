@@ -15,12 +15,8 @@ export class TriageAgent {
       const geminiService = getGeminiService();
       const aiResponse = await geminiService.analyzeEmergencyTriage(request.text, request.location);
 
-      console.log('TriageAgent - AI Response success:', aiResponse.success); // Debug log
-      console.log('TriageAgent - AI Response content:', aiResponse.content); // Debug log
-
       if (!aiResponse.success || !aiResponse.content) {
         // Fallback to rule-based analysis if AI fails
-        console.warn('Gemini AI failed, falling back to rule-based analysis:', aiResponse.error);
         return this.degradedAnalysis(request, startTime);
       }
 
@@ -43,12 +39,10 @@ export class TriageAgent {
         };
 
       } catch (parseError) {
-        console.error('Failed to parse AI response:', parseError);
         return this.degradedAnalysis(request, startTime);
       }
 
     } catch (error) {
-      console.error('TriageAgent AI error:', error);
       // Fallback to rule-based analysis
       return this.degradedAnalysis(request, startTime);
     }
