@@ -26,6 +26,9 @@ export interface ServiceMatch {
   city?: string;
   coordinates?: { lat: number; lng: number };
   coverage?: string[];
+  // Dynamic location enhancement fields
+  travelTime?: string;
+  userLocation?: string;
 }
 
 export interface BookingRecord {

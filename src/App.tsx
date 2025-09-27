@@ -77,13 +77,14 @@ function App() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Frontline Worker Support AI</h1>
-                <p className="text-sm text-gray-600">AI-Powered Emergency Response Coordination</p>
+                <p className="text-sm text-gray-600">AI-Powered Emergency Response Coordination with Location Intelligence</p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Left Column: Form and Processing */}
@@ -117,7 +118,7 @@ function App() {
                   AI Agents Ready
                 </h3>
                 <p className="text-gray-600">
-                  Submit an emergency request to see the multi-agent system in action.
+                  Submit an emergency request to see the multi-agent system with real location intelligence in action.
                   Try one of the example scenarios to get started quickly.
                 </p>
                 
@@ -127,8 +128,8 @@ function App() {
                     <p className="text-blue-700">Powered by Google Gemini AI</p>
                   </div>
                   <div className="bg-green-50 p-4 rounded-lg">
-                    <h4 className="font-semibold text-green-900">Real-time Analysis</h4>
-                    <p className="text-green-700">Intelligent emergency response coordination</p>
+                    <h4 className="font-semibold text-green-900">Location-Aware</h4>
+                    <p className="text-green-700">Real GPS-based emergency coordination</p>
                   </div>
                 </div>
               </div>
@@ -139,8 +140,8 @@ function App() {
         {/* Footer Info */}
         <div className="mt-12 text-center text-gray-600">
           <p className="text-sm">
-            Emergency response coordination system powered by AI agents.
-            For emergencies, please contact your local emergency services immediately.
+            Emergency response coordination system with OpenStreetMap location intelligence.
+            For life-threatening emergencies, contact your local emergency services immediately.
           </p>
         </div>
       </div>

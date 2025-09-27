@@ -1,6 +1,7 @@
 import { EmergencyRequest, TriageResult, ServiceMatch, AgentResponse } from '../types';
 import { SERVICES, inferLocationFromText, getServicesByProximity } from '../data/services';
 import { getGeminiService } from '../services/GeminiService';
+import { getLocationService } from '../services/LocationService';
 
 export class GuidanceAgent {
   async findBestService(
@@ -15,13 +16,34 @@ export class GuidanceAgent {
         return this.degradedMatching(request, triageResult, startTime);
       }
 
-      // Use real AI processing with Gemini - now with enhanced location awareness
+      // Step 1: Use LocationService for real location processing
+      const locationService = getLocationService();
+      let userLocation = null;
+      let locationProcessingSuccess = false;
+
+      if (request.location || request.text) {
+        try {
+          const locationText = request.location || request.text;
+          userLocation = await locationService.geocodeLocation(locationText);
+          locationProcessingSuccess = !!userLocation;
+          
+          if (userLocation) {
+            console.log(`📍 Location geocoded: ${locationText} → ${userLocation.lat.toFixed(4)}, ${userLocation.lng.toFixed(4)}`);
+          } else {
+            console.log('⚠️ Geocoding failed, using AI-only matching');
+          }
+        } catch (error) {
+          console.warn('Location processing failed:', error);
+        }
+      }
+
+      // Step 2: Use Gemini AI for service matching with location context
       const geminiService = getGeminiService();
       
       const aiResponse = await geminiService.matchEmergencyServices(
         request.text,
         triageResult.urgency,
-        request.location // Pass the original location text for better geocoding
+        request.location // Pass the original location text for AI context
       );
 
       if (!aiResponse.success || !aiResponse.content) {
@@ -32,18 +54,41 @@ export class GuidanceAgent {
       try {
         const aiAnalysis = geminiService.parseJsonResponse(aiResponse.content);
         
-        // Find the selected service by ID
-        const selectedService = SERVICES.find(s => s.serviceId === aiAnalysis.selectedServiceId);
+        // Step 3: Find the selected service by ID
+        let selectedService = SERVICES.find(s => s.serviceId === aiAnalysis.selectedServiceId);
         
         if (!selectedService) {
           console.warn('AI selected invalid service, falling back to rule-based matching');
           return this.degradedMatching(request, triageResult, startTime);
         }
 
+        // Step 4: Enhance with location-specific data if we have user location
+        if (userLocation && selectedService.coordinates) {
+          const distance = this.calculateDistance(
+            userLocation.lat, userLocation.lng,
+            selectedService.coordinates.lat, selectedService.coordinates.lng
+          );
+          const travelTime = this.estimateTravelTime(distance);
+          
+          // Create enhanced service with location data
+          selectedService = {
+            ...selectedService,
+            distance: Math.round(distance * 10) / 10,
+            travelTime: travelTime,
+            userLocation: userLocation.city || 'Pakistan'
+          };
+
+          console.log(`🎯 Service enhanced with location: ${selectedService.serviceName} (${selectedService.distance}km, ${selectedService.travelTime})`);
+        } else if (selectedService) {
+          console.log(`🎯 Service selected without location enhancement: ${selectedService.serviceName}`);
+        }
+
         return {
           success: true,
           data: selectedService,
-          reasoning: `AI Service Matching: ${aiAnalysis.reasoning}`,
+          reasoning: locationProcessingSuccess 
+            ? `Location-aware AI matching: ${aiAnalysis.reasoning}` 
+            : `AI Service Matching: ${aiAnalysis.reasoning}`,
           confidence: aiAnalysis.confidence || 0.8,
           processingTime: Date.now() - startTime
         };
@@ -110,5 +155,36 @@ export class GuidanceAgent {
       confidence: 0.5,
       processingTime: Date.now() - startTime
     };
+  }
+
+  /**
+   * Calculate distance between two coordinates using Haversine formula
+   */
+  private calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  /**
+   * Estimate travel time based on distance and Pakistani traffic conditions
+   */
+  private estimateTravelTime(distanceKm: number): string {
+    // Pakistan urban traffic considerations
+    const avgSpeedKmh = distanceKm < 5 ? 20 : 30; // Slower for short urban distances
+    const travelTimeMinutes = Math.ceil((distanceKm / avgSpeedKmh) * 60);
+    
+    if (travelTimeMinutes < 5) return '< 5 min';
+    if (travelTimeMinutes < 60) return `${travelTimeMinutes} min`;
+    
+    const hours = Math.floor(travelTimeMinutes / 60);
+    const minutes = travelTimeMinutes % 60;
+    return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
   }
 }

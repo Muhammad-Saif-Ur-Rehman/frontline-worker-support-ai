@@ -59,6 +59,34 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({ result }) => {
                   <Phone className="h-4 w-4 mr-1" />
                   <span className="text-sm">{result.selectedService.phone}</span>
                 </div>
+                
+                {/* Location-enhanced information */}
+                {(result.selectedService.distance || result.selectedService.travelTime) && (
+                  <div className="mt-3 pt-3 border-t border-blue-200">
+                    <div className="text-xs text-blue-600 mb-1 font-medium">📍 Location Intelligence</div>
+                    {result.selectedService.distance && (
+                      <div className="flex items-center text-blue-700">
+                        <span className="text-sm">
+                          📏 Distance: <strong>{result.selectedService.distance}km</strong>
+                        </span>
+                      </div>
+                    )}
+                    {result.selectedService.travelTime && (
+                      <div className="flex items-center text-blue-700 mt-1">
+                        <span className="text-sm">
+                          ⏱️ Est. Travel Time: <strong>{result.selectedService.travelTime}</strong>
+                        </span>
+                      </div>
+                    )}
+                    {result.selectedService.userLocation && (
+                      <div className="flex items-center text-blue-700 mt-1">
+                        <span className="text-sm">
+                          🌍 Your Area: <strong>{result.selectedService.userLocation}</strong>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
